@@ -240,6 +240,29 @@ def test_composed_currency_prefixes(std, text, expected):
     assert std(text) == expected
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("$0.5", "¢50"),
+        ("$0.05", "¢5"),
+        ("$0.50", "¢50"),
+        ("$0.1", "¢10"),
+        ("$0.01", "¢1"),
+        ("$0 and a half", "¢50"),
+        ("minus $0 and a half", "-¢50"),
+        ("-$0 and a half", "-¢50"),
+        ("+$0 and a half", "+¢50"),
+        ("point five dollars", "¢50"),
+        ("minus point five dollars", "-¢50"),
+        ("-€0.5", "-¢50"),
+        ("+£0.5", "+¢50"),
+    ],
+)
+def test_currency_fraction_scale(std, text, expected):
+    assert std(text) == expected
+
+
 @pytest.mark.parametrize(
     ("text", "expected"), [("5-2", "5 2"), ("$0-36", "$0 36")]
 )

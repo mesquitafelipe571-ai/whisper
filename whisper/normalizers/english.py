@@ -429,7 +429,7 @@ class EnglishNumberNormalizer:
                 if (
                     last_word in self.decimals
                     or last_word in self.multipliers
-                    or re.match(r"^[€£$¢+-]?\d+$", last_word)
+                    or re.fullmatch(r"[+-]?[€£$¢]?\d+", last_word)
                 ):
                     results.append("point five")
                 else:
@@ -459,7 +459,7 @@ class EnglishNumberNormalizer:
 
         def extract_cents(m: Match):
             try:
-                return f"¢{int(m.group(1))}"
+                return f"¢{int(m.group(1).ljust(2, '0'))}"
             except ValueError:
                 return m.string
 
