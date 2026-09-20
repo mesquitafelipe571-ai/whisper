@@ -186,6 +186,42 @@ def test_number_normalizer_does_not_append_prefixed_values_to_decimals(text, exp
     assert EnglishNumberNormalizer()(text) == expected
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("point -5", "point -5"),
+        ("point  -5", "point -5"),
+        ("point\t-5", "point -5"),
+        ("point\n-5", "point -5"),
+        ("point minus five", "point -5"),
+        ("point +5", "point +5"),
+        ("point plus five", "point +5"),
+        ("point $5", "point $5"),
+        ("2 point -5", "2 point -5"),
+        ("checkpoint -5", "checkpoint -5"),
+        ("endpoint +5", "endpoint +5"),
+        ("score -5", "score -5"),
+        ("1 -5", "one -5"),
+        ("point five", "0.5"),
+        ("2 point 5", "2.5"),
+        ("eighth", "8th"),
+        ("twenty eighth", "28th"),
+        ("0 double zero", "000"),
+        ("0 triple one", "0111"),
+    ],
+)
+def test_signed_tokens_and_decimal_boundaries(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"), [("5-2", "5 2"), ("$0-36", "$0 36")]
+)
+def test_text_normalizer_keeps_internal_hyphens_as_separators(text, expected):
+    assert EnglishTextNormalizer()(text) == expected
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [

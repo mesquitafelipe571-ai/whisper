@@ -394,6 +394,10 @@ class EnglishNumberNormalizer:
                 elif current == "point":
                     if next in self.decimals or next_is_numeric:
                         value = str(value if value is not None else "0") + "."
+                    else:
+                        if value is not None:
+                            yield output(value)
+                        yield output(current)
                 else:
                     # should all have been covered at this point
                     raise ValueError(f"Unexpected token: {current}")
@@ -574,8 +578,8 @@ class EnglishTextNormalizer:
 
         # preserve token-leading numeric signs as number words; internal hyphens such
         # as "$0-36" remain punctuation and are removed by the symbol cleaner below
-        s = re.sub(r"(?<!\w)(?<!point )-(?=[€£$¢]?\d)", "minus ", s)
-        s = re.sub(r"(?<!\w)(?<!point )\+(?=[€£$¢]?\d)", "plus ", s)
+        s = re.sub(r"(?<!\S)-(?=[€£$¢]?\d)", "minus ", s)
+        s = re.sub(r"(?<!\S)\+(?=[€£$¢]?\d)", "plus ", s)
         s = remove_symbols_and_diacritics(s, keep=".%$¢€£")  # keep numeric symbols
 
         s = self.standardize_numbers(s)
