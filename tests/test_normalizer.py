@@ -215,6 +215,31 @@ def test_signed_tokens_and_decimal_boundaries(std, text, expected):
     assert std(text) == expected
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("minus $5 dollars", "-$5"),
+        ("minus $5 million dollars", "-$5000000"),
+        ("minus $5 dollars and fifty cents", "-$5.50"),
+        ("-$5 million", "-$5000000"),
+        ("+$5 million", "+$5000000"),
+        ("-€5 million", "-€5000000"),
+        ("+€5 million euros", "+€5000000"),
+        ("-£5 million pounds", "-£5000000"),
+        ("+£5 million", "+£5000000"),
+        ("plus €5 euros", "+€5"),
+        ("negative £5 pounds", "-£5"),
+        ("-$5 dollars and one cent", "-$5.01"),
+        ("-$5 point two", "-$5.2"),
+        ("$5 million", "$5000000"),
+        ("-5 million", "-5000000"),
+    ],
+)
+def test_composed_currency_prefixes(std, text, expected):
+    assert std(text) == expected
+
+
 @pytest.mark.parametrize(
     ("text", "expected"), [("5-2", "5 2"), ("$0-36", "$0 36")]
 )

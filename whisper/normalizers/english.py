@@ -185,14 +185,14 @@ class EnglishNumberNormalizer:
 
         def set_prefix(new_prefix: str):
             nonlocal prefix
-            signs = set(self.preceding_prefixers.values())
-            currencies = set(self.following_prefixers.values())
-            if prefix in signs and new_prefix in currencies:
-                prefix += new_prefix
-            elif prefix in currencies and new_prefix in signs:
-                prefix = new_prefix + prefix
-            else:
-                prefix = new_prefix
+            old_prefix = prefix or ""
+            sign = ""
+            for candidate in (new_prefix, old_prefix):
+                if candidate.startswith(("+", "-")):
+                    sign = candidate[0]
+                    break
+            currency = new_prefix.lstrip("+-") or old_prefix.lstrip("+-")
+            prefix = sign + currency
 
         if len(words) == 0:
             return
@@ -204,11 +204,11 @@ class EnglishNumberNormalizer:
 
             next_is_numeric = next is not None and re.match(r"^\d+(\.\d+)?$", next)
             next_is_prefixed_numeric = next is not None and re.match(
-                r"^[€£$¢+-]?\d+(\.\d+)?$", next
+                r"^[+-]?[€£$¢]?\d+(\.\d+)?$", next
             )
-            has_prefix = current[0] in self.prefixes
-            current_without_prefix = current[1:] if has_prefix else current
-            if re.match(r"^\d+(\.\d+)?$", current_without_prefix):
+            numeric = re.fullmatch(r"([+-]?[€£$¢]?)(\d+(?:\.\d+)?)", current)
+            if numeric:
+                current_prefix, current_without_prefix = numeric.groups()
                 # arabic numbers (potentially with signs and fractions)
                 f = to_fraction(current_without_prefix)
                 assert f is not None
@@ -220,8 +220,8 @@ class EnglishNumberNormalizer:
                     else:
                         yield output(value)
 
-                if has_prefix:
-                    set_prefix(current[0])
+                if current_prefix:
+                    set_prefix(current_prefix)
                 if f.denominator == 1:
                     value = f.numerator  # store integers as int
                 else:
