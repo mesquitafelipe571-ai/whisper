@@ -89,6 +89,26 @@ def test_spelling_normalizer():
     assert std("cancelation") == "cancellation"
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("ninth", "9th"),
+        ("twenty ninth", "29th"),
+        ("one hundred and ninth", "109th"),
+    ],
+)
+def test_number_normalizer_recognizes_ninth_ordinals(std, text, expected):
+    assert std(text) == expected
+
+
+def test_spelling_normalizer_removes_markup_from_archaeology():
+    std = EnglishSpellingNormalizer()
+
+    assert std("archaeology") == "archeology"
+    assert all("<" not in value and ">" not in value for value in std.mapping.values())
+
+
 def test_text_normalizer():
     std = EnglishTextNormalizer()
     assert std("Let's") == "let us"
