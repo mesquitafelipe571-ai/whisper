@@ -263,9 +263,26 @@ def test_currency_fraction_scale(std, text, expected):
     assert std(text) == expected
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
 @pytest.mark.parametrize(
-    ("text", "expected"), [("5-2", "5 2"), ("$0-36", "$0 36")]
+    ("text", "expected"),
+    [
+        ("-5%", "-5%"),
+        ("+5%", "+5%"),
+        ("-5th", "-5th"),
+        ("+1st", "+1st"),
+        ("-2nd", "-2nd"),
+        ("-3rd", "-3rd"),
+        ("-1960s", "-1960s"),
+        ("-5.5%", "-5.5%"),
+        ("minus 5%", "-5%"),
+    ],
 )
+def test_literal_signs_with_numeric_suffixes(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize(("text", "expected"), [("5-2", "5 2"), ("$0-36", "$0 36")])
 def test_text_normalizer_keeps_internal_hyphens_as_separators(text, expected):
     assert EnglishTextNormalizer()(text) == expected
 

@@ -204,7 +204,7 @@ class EnglishNumberNormalizer:
 
             next_is_numeric = next is not None and re.match(r"^\d+(\.\d+)?$", next)
             next_is_prefixed_numeric = next is not None and re.match(
-                r"^[+-]?[€£$¢]?\d+(\.\d+)?$", next
+                r"^[+-]?[€£$¢]?\d+(\.\d+)?(%|st|nd|rd|th|s)?$", next
             )
             numeric = re.fullmatch(r"([+-]?[€£$¢]?)(\d+(?:\.\d+)?)", current)
             if numeric:
