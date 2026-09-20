@@ -15,7 +15,7 @@ class EnglishNumberNormalizer:
 
     - remove any commas
     - keep the suffixes such as: `1960s`, `274th`, `32nd`, etc.
-    - spell out currency symbols after the number. e.g. `$20 million` -> `20000000 dollars`
+    - prefix currency symbols. e.g. `20 million dollars` -> `$20000000`
     - spell out `one` and `ones`
     - interpret successive single-digit numbers as nominal: `one oh one` -> `101`
     """
@@ -217,7 +217,7 @@ class EnglishNumberNormalizer:
                     yield output(value)
                 yield output(current)
             elif current in self.zeros:
-                value = str(value or "") + "0"
+                value = str(value if value is not None else "") + "0"
             elif current in self.ones:
                 ones = self.ones[current]
 
@@ -367,7 +367,9 @@ class EnglishNumberNormalizer:
                     if next in self.ones or next in self.zeros:
                         repeats = 2 if current == "double" else 3
                         ones = self.ones.get(next, 0)
-                        value = str(value or "") + str(ones) * repeats
+                        value = str(value if value is not None else "") + str(
+                            ones
+                        ) * repeats
                         skip = True
                     else:
                         if value is not None:
@@ -375,7 +377,7 @@ class EnglishNumberNormalizer:
                         yield output(current)
                 elif current == "point":
                     if next in self.decimals or next_is_numeric:
-                        value = str(value or "") + "."
+                        value = str(value if value is not None else "0") + "."
                 else:
                     # should all have been covered at this point
                     raise ValueError(f"Unexpected token: {current}")
@@ -387,19 +389,28 @@ class EnglishNumberNormalizer:
             yield output(value)
 
     def preprocess(self, s: str):
+        # remove commas between digits
+        s = re.sub(r"(?<=\d),(?=\d)", "", s)
+
         # replace "<number> and a half" with "<number> point five"
         results = []
 
         segments = re.split(r"\band\s+a\s+half\b", s)
         for i, segment in enumerate(segments):
             if len(segment.strip()) == 0:
+                if i < len(segments) - 1:
+                    results.append("and a half")
                 continue
             if i == len(segments) - 1:
                 results.append(segment)
             else:
                 results.append(segment)
                 last_word = segment.rsplit(maxsplit=2)[-1]
-                if last_word in self.decimals or last_word in self.multipliers:
+                if (
+                    last_word in self.decimals
+                    or last_word in self.multipliers
+                    or re.match(r"^[€£$¢+-]?\d+$", last_word)
+                ):
                     results.append("point five")
                 else:
                     results.append("and a half")
@@ -433,7 +444,7 @@ class EnglishNumberNormalizer:
 
         # apply currency postprocessing; "$2 and ¢7" -> "$2.07"
         s = re.sub(r"([€£$])([0-9]+) (?:and )?¢([0-9]{1,2})\b", combine_cents, s)
-        s = re.sub(r"[€£$]0.([0-9]{1,2})\b", extract_cents, s)
+        s = re.sub(r"[€£$]0\.([0-9]{1,2})\b", extract_cents, s)
 
         # write "one(s)" instead of "1(s)", just for the readability;
         # only when it stands alone, since `\b` would also match inside
@@ -537,7 +548,7 @@ class EnglishTextNormalizer:
         for pattern, replacement in self.replacers.items():
             s = re.sub(pattern, replacement, s)
 
-        s = re.sub(r"(\d),(\d)", r"\1\2", s)  # remove commas between digits
+        s = re.sub(r"(?<=\d),(?=\d)", "", s)  # remove commas between digits
         s = re.sub(r"\.([^0-9]|$)", r" \1", s)  # remove periods not followed by numbers
         s = remove_symbols_and_diacritics(s, keep=".%$¢€£")  # keep numeric symbols
 

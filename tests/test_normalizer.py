@@ -82,6 +82,44 @@ def test_number_normalizer(std):
     assert std("ones") == "ones"
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+def test_number_normalizer_requires_a_literal_decimal_point_for_cents(std):
+    assert std("$0 36") == "$0 36"
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("1,000", "1000"), ("1,2,3", "123")],
+)
+def test_number_normalizer_removes_digit_adjacent_commas(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("and a half", "and a half"),
+        ("2 and a half", "2.5"),
+        ("$2 and a half", "$2.5"),
+    ],
+)
+def test_number_normalizer_preserves_or_converts_half_expressions(
+    std, text, expected
+):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("point one", "0.1"), ("0 point one", "0.1"), ("0 zero", "00")],
+)
+def test_number_normalizer_preserves_zero_values(std, text, expected):
+    assert std(text) == expected
+
+
 def test_spelling_normalizer():
     std = EnglishSpellingNormalizer()
 
