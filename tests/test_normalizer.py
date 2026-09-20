@@ -164,6 +164,28 @@ def test_number_normalizer_preserves_signs_with_currency(std, text, expected):
     assert std(text) == expected
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("-$5", "-$5"),
+        ("+€5", "+€5"),
+        ("-5 dollars", "-$5"),
+        ("-$0.50", "-¢50"),
+    ],
+)
+def test_number_normalizer_preserves_literal_signs_with_currency(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("point $5", "point $5"), ("point -5", "point -5")],
+)
+def test_number_normalizer_does_not_append_prefixed_values_to_decimals(text, expected):
+    assert EnglishNumberNormalizer()(text) == expected
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
