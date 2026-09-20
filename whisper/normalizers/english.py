@@ -15,7 +15,7 @@ class EnglishNumberNormalizer:
 
     - remove any commas
     - keep the suffixes such as: `1960s`, `274th`, `32nd`, etc.
-    - spell out currency symbols after the number. e.g. `$20 million` -> `20000000 dollars`
+    - prefix currency symbols. e.g. `20 million dollars` -> `$20000000`
     - spell out `one` and `ones`
     - interpret successive single-digit numbers as nominal: `one oh one` -> `101`
     """
@@ -61,11 +61,12 @@ class EnglishNumberNormalizer:
             "second": (2, "nd"),
             "third": (3, "rd"),
             "fifth": (5, "th"),
+            "ninth": (9, "th"),
             "twelfth": (12, "th"),
             **{
                 name + ("h" if name.endswith("t") else "th"): (value, "th")
                 for name, value in self.ones.items()
-                if value > 3 and value != 5 and value != 12
+                if value > 3 and value != 5 and value != 9 and value != 12
             },
         }
         self.ones_suffixed = {**self.ones_plural, **self.ones_ordinal}
@@ -182,6 +183,17 @@ class EnglishNumberNormalizer:
             prefix = None
             return result
 
+        def set_prefix(new_prefix: str):
+            nonlocal prefix
+            signs = set(self.preceding_prefixers.values())
+            currencies = set(self.following_prefixers.values())
+            if prefix in signs and new_prefix in currencies:
+                prefix += new_prefix
+            elif prefix in currencies and new_prefix in signs:
+                prefix = new_prefix + prefix
+            else:
+                prefix = new_prefix
+
         if len(words) == 0:
             return
 
@@ -190,7 +202,9 @@ class EnglishNumberNormalizer:
                 skip = False
                 continue
 
-            next_is_numeric = next is not None and re.match(r"^\d+(\.\d+)?$", next)
+            next_is_numeric = next is not None and re.match(
+                r"^[€£$¢+-]?\d+(\.\d+)?$", next
+            )
             has_prefix = current[0] in self.prefixes
             current_without_prefix = current[1:] if has_prefix else current
             if re.match(r"^\d+(\.\d+)?$", current_without_prefix):
@@ -205,7 +219,8 @@ class EnglishNumberNormalizer:
                     else:
                         yield output(value)
 
-                prefix = current[0] if has_prefix else prefix
+                if has_prefix:
+                    set_prefix(current[0])
                 if f.denominator == 1:
                     value = f.numerator  # store integers as int
                 else:
@@ -216,7 +231,7 @@ class EnglishNumberNormalizer:
                     yield output(value)
                 yield output(current)
             elif current in self.zeros:
-                value = str(value or "") + "0"
+                value = str(value if value is not None else "") + "0"
             elif current in self.ones:
                 ones = self.ones[current]
 
@@ -331,7 +346,7 @@ class EnglishNumberNormalizer:
             elif current in self.following_prefixers:
                 # apply prefix (dollars, cents, etc.) only after a number
                 if value is not None:
-                    prefix = self.following_prefixers[current]
+                    set_prefix(self.following_prefixers[current])
                     yield output(value)
                 else:
                     yield output(current)
@@ -366,7 +381,10 @@ class EnglishNumberNormalizer:
                     if next in self.ones or next in self.zeros:
                         repeats = 2 if current == "double" else 3
                         ones = self.ones.get(next, 0)
-                        value = str(value or "") + str(ones) * repeats
+                        value = (
+                            str(value if value is not None else "")
+                            + str(ones) * repeats
+                        )
                         skip = True
                     else:
                         if value is not None:
@@ -374,7 +392,7 @@ class EnglishNumberNormalizer:
                         yield output(current)
                 elif current == "point":
                     if next in self.decimals or next_is_numeric:
-                        value = str(value or "") + "."
+                        value = str(value if value is not None else "0") + "."
                 else:
                     # should all have been covered at this point
                     raise ValueError(f"Unexpected token: {current}")
@@ -386,19 +404,28 @@ class EnglishNumberNormalizer:
             yield output(value)
 
     def preprocess(self, s: str):
+        # remove commas between digits
+        s = re.sub(r"(?<=\d),(?=\d)", "", s)
+
         # replace "<number> and a half" with "<number> point five"
         results = []
 
         segments = re.split(r"\band\s+a\s+half\b", s)
         for i, segment in enumerate(segments):
             if len(segment.strip()) == 0:
+                if i < len(segments) - 1:
+                    results.append("and a half")
                 continue
             if i == len(segments) - 1:
                 results.append(segment)
             else:
                 results.append(segment)
                 last_word = segment.rsplit(maxsplit=2)[-1]
-                if last_word in self.decimals or last_word in self.multipliers:
+                if (
+                    last_word in self.decimals
+                    or last_word in self.multipliers
+                    or re.match(r"^[€£$¢+-]?\d+$", last_word)
+                ):
                     results.append("point five")
                 else:
                     results.append("and a half")
@@ -417,10 +444,11 @@ class EnglishNumberNormalizer:
     def postprocess(self, s: str):
         def combine_cents(m: Match):
             try:
-                currency = m.group(1)
-                integer = m.group(2)
-                cents = int(m.group(3))
-                return f"{currency}{integer}.{cents:02d}"
+                sign = m.group(1)
+                currency = m.group(2)
+                integer = m.group(3)
+                cents = int(m.group(4))
+                return f"{sign}{currency}{integer}.{cents:02d}"
             except ValueError:
                 return m.string
 
@@ -431,11 +459,17 @@ class EnglishNumberNormalizer:
                 return m.string
 
         # apply currency postprocessing; "$2 and ¢7" -> "$2.07"
-        s = re.sub(r"([€£$])([0-9]+) (?:and )?¢([0-9]{1,2})\b", combine_cents, s)
-        s = re.sub(r"[€£$]0.([0-9]{1,2})\b", extract_cents, s)
+        s = re.sub(
+            r"([+-]?)([€£$])([0-9]+) (?:and )?¢([0-9]{1,2})\b",
+            combine_cents,
+            s,
+        )
+        s = re.sub(r"[€£$]0\.([0-9]{1,2})\b", extract_cents, s)
 
-        # write "one(s)" instead of "1(s)", just for the readability
-        s = re.sub(r"\b1(s?)\b", r"one\1", s)
+        # write "one(s)" instead of "1(s)", just for the readability;
+        # only when it stands alone, since `\b` would also match inside
+        # numbers like "$1", "1%", "1.5" and "3.1"
+        s = re.sub(r"(?<!\S)1(s?)(?!\S)", r"one\1", s)
 
         return s
 
@@ -534,7 +568,7 @@ class EnglishTextNormalizer:
         for pattern, replacement in self.replacers.items():
             s = re.sub(pattern, replacement, s)
 
-        s = re.sub(r"(\d),(\d)", r"\1\2", s)  # remove commas between digits
+        s = re.sub(r"(?<=\d),(?=\d)", "", s)  # remove commas between digits
         s = re.sub(r"\.([^0-9]|$)", r" \1", s)  # remove periods not followed by numbers
         s = remove_symbols_and_diacritics(s, keep=".%$¢€£")  # keep numeric symbols
 
@@ -542,9 +576,9 @@ class EnglishTextNormalizer:
         s = self.standardize_spellings(s)
 
         # now remove prefix/suffix symbols that are not preceded/followed by numbers
-        s = re.sub(r"[.$¢€£]([^0-9])", r" \1", s)
-        s = re.sub(r"([^0-9])%", r"\1 ", s)
+        s = re.sub(r"[.$¢€£](?![0-9])", " ", s)
+        s = re.sub(r"(?<![0-9])%", " ", s)
 
         s = re.sub(r"\s+", " ", s)  # replace any successive whitespaces with a space
 
-        return s
+        return s.strip()
