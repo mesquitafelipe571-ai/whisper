@@ -87,6 +87,11 @@ def test_number_normalizer_requires_a_literal_decimal_point_for_cents(std):
     assert std("$0 36") == "$0 36"
 
 
+def test_number_normalizer_does_not_treat_a_hyphen_as_a_decimal_point():
+    assert EnglishNumberNormalizer()("$0-36") == "$0-36"
+    assert EnglishTextNormalizer()("$0-36") == "$0 36"
+
+
 @pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
 @pytest.mark.parametrize(
     ("text", "expected"),
@@ -105,9 +110,7 @@ def test_number_normalizer_removes_digit_adjacent_commas(std, text, expected):
         ("$2 and a half", "$2.5"),
     ],
 )
-def test_number_normalizer_preserves_or_converts_half_expressions(
-    std, text, expected
-):
+def test_number_normalizer_preserves_or_converts_half_expressions(std, text, expected):
     assert std(text) == expected
 
 
@@ -145,6 +148,33 @@ def test_spelling_normalizer_removes_markup_from_archaeology():
 
     assert std("archaeology") == "archeology"
     assert all("<" not in value and ">" not in value for value in std.mapping.values())
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("minus one dollar", "-$1"),
+        ("minus $5", "-$5"),
+        ("plus one euro", "+€1"),
+        ("minus one dollar and fifty cents", "-$1.50"),
+    ],
+)
+def test_number_normalizer_preserves_signs_with_currency(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("price is $", "price is"),
+        ("% rate", "rate"),
+        ("$1", "$1"),
+        ("1%", "1%"),
+    ],
+)
+def test_text_normalizer_removes_only_dangling_numeric_symbols(text, expected):
+    assert EnglishTextNormalizer()(text) == expected
 
 
 def test_text_normalizer():

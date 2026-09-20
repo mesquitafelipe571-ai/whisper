@@ -183,6 +183,17 @@ class EnglishNumberNormalizer:
             prefix = None
             return result
 
+        def set_prefix(new_prefix: str):
+            nonlocal prefix
+            signs = set(self.preceding_prefixers.values())
+            currencies = set(self.following_prefixers.values())
+            if prefix in signs and new_prefix in currencies:
+                prefix += new_prefix
+            elif prefix in currencies and new_prefix in signs:
+                prefix = new_prefix + prefix
+            else:
+                prefix = new_prefix
+
         if len(words) == 0:
             return
 
@@ -191,7 +202,9 @@ class EnglishNumberNormalizer:
                 skip = False
                 continue
 
-            next_is_numeric = next is not None and re.match(r"^\d+(\.\d+)?$", next)
+            next_is_numeric = next is not None and re.match(
+                r"^[€£$¢+-]?\d+(\.\d+)?$", next
+            )
             has_prefix = current[0] in self.prefixes
             current_without_prefix = current[1:] if has_prefix else current
             if re.match(r"^\d+(\.\d+)?$", current_without_prefix):
@@ -206,7 +219,8 @@ class EnglishNumberNormalizer:
                     else:
                         yield output(value)
 
-                prefix = current[0] if has_prefix else prefix
+                if has_prefix:
+                    set_prefix(current[0])
                 if f.denominator == 1:
                     value = f.numerator  # store integers as int
                 else:
@@ -332,7 +346,7 @@ class EnglishNumberNormalizer:
             elif current in self.following_prefixers:
                 # apply prefix (dollars, cents, etc.) only after a number
                 if value is not None:
-                    prefix = self.following_prefixers[current]
+                    set_prefix(self.following_prefixers[current])
                     yield output(value)
                 else:
                     yield output(current)
@@ -367,9 +381,10 @@ class EnglishNumberNormalizer:
                     if next in self.ones or next in self.zeros:
                         repeats = 2 if current == "double" else 3
                         ones = self.ones.get(next, 0)
-                        value = str(value if value is not None else "") + str(
-                            ones
-                        ) * repeats
+                        value = (
+                            str(value if value is not None else "")
+                            + str(ones) * repeats
+                        )
                         skip = True
                     else:
                         if value is not None:
@@ -429,10 +444,11 @@ class EnglishNumberNormalizer:
     def postprocess(self, s: str):
         def combine_cents(m: Match):
             try:
-                currency = m.group(1)
-                integer = m.group(2)
-                cents = int(m.group(3))
-                return f"{currency}{integer}.{cents:02d}"
+                sign = m.group(1)
+                currency = m.group(2)
+                integer = m.group(3)
+                cents = int(m.group(4))
+                return f"{sign}{currency}{integer}.{cents:02d}"
             except ValueError:
                 return m.string
 
@@ -443,7 +459,11 @@ class EnglishNumberNormalizer:
                 return m.string
 
         # apply currency postprocessing; "$2 and ¢7" -> "$2.07"
-        s = re.sub(r"([€£$])([0-9]+) (?:and )?¢([0-9]{1,2})\b", combine_cents, s)
+        s = re.sub(
+            r"([+-]?)([€£$])([0-9]+) (?:and )?¢([0-9]{1,2})\b",
+            combine_cents,
+            s,
+        )
         s = re.sub(r"[€£$]0\.([0-9]{1,2})\b", extract_cents, s)
 
         # write "one(s)" instead of "1(s)", just for the readability;
@@ -556,9 +576,9 @@ class EnglishTextNormalizer:
         s = self.standardize_spellings(s)
 
         # now remove prefix/suffix symbols that are not preceded/followed by numbers
-        s = re.sub(r"[.$¢€£]([^0-9])", r" \1", s)
-        s = re.sub(r"([^0-9])%", r"\1 ", s)
+        s = re.sub(r"[.$¢€£](?![0-9])", " ", s)
+        s = re.sub(r"(?<![0-9])%", " ", s)
 
         s = re.sub(r"\s+", " ", s)  # replace any successive whitespaces with a space
 
-        return s
+        return s.strip()
