@@ -185,14 +185,14 @@ class EnglishNumberNormalizer:
 
         def set_prefix(new_prefix: str):
             nonlocal prefix
-            signs = set(self.preceding_prefixers.values())
-            currencies = set(self.following_prefixers.values())
-            if prefix in signs and new_prefix in currencies:
-                prefix += new_prefix
-            elif prefix in currencies and new_prefix in signs:
-                prefix = new_prefix + prefix
-            else:
-                prefix = new_prefix
+            old_prefix = prefix or ""
+            sign = ""
+            for candidate in (new_prefix, old_prefix):
+                if candidate.startswith(("+", "-")):
+                    sign = candidate[0]
+                    break
+            currency = new_prefix.lstrip("+-") or old_prefix.lstrip("+-")
+            prefix = sign + currency
 
         if len(words) == 0:
             return
@@ -202,12 +202,13 @@ class EnglishNumberNormalizer:
                 skip = False
                 continue
 
-            next_is_numeric = next is not None and re.match(
-                r"^[€£$¢+-]?\d+(\.\d+)?$", next
+            next_is_numeric = next is not None and re.match(r"^\d+(\.\d+)?$", next)
+            next_is_prefixed_numeric = next is not None and re.match(
+                r"^[+-]?[€£$¢]?\d+(\.\d+)?(%|st|nd|rd|th|s)?$", next
             )
-            has_prefix = current[0] in self.prefixes
-            current_without_prefix = current[1:] if has_prefix else current
-            if re.match(r"^\d+(\.\d+)?$", current_without_prefix):
+            numeric = re.fullmatch(r"([+-]?[€£$¢]?)(\d+(?:\.\d+)?)", current)
+            if numeric:
+                current_prefix, current_without_prefix = numeric.groups()
                 # arabic numbers (potentially with signs and fractions)
                 f = to_fraction(current_without_prefix)
                 assert f is not None
@@ -219,8 +220,8 @@ class EnglishNumberNormalizer:
                     else:
                         yield output(value)
 
-                if has_prefix:
-                    set_prefix(current[0])
+                if current_prefix:
+                    set_prefix(current_prefix)
                 if f.denominator == 1:
                     value = f.numerator  # store integers as int
                 else:
@@ -339,7 +340,7 @@ class EnglishNumberNormalizer:
                 if value is not None:
                     yield output(value)
 
-                if next in self.words or next_is_numeric:
+                if next in self.words or next_is_prefixed_numeric:
                     prefix = self.preceding_prefixers[current]
                 else:
                     yield output(current)
@@ -393,6 +394,10 @@ class EnglishNumberNormalizer:
                 elif current == "point":
                     if next in self.decimals or next_is_numeric:
                         value = str(value if value is not None else "0") + "."
+                    else:
+                        if value is not None:
+                            yield output(value)
+                        yield output(current)
                 else:
                     # should all have been covered at this point
                     raise ValueError(f"Unexpected token: {current}")
@@ -424,7 +429,7 @@ class EnglishNumberNormalizer:
                 if (
                     last_word in self.decimals
                     or last_word in self.multipliers
-                    or re.match(r"^[€£$¢+-]?\d+$", last_word)
+                    or re.fullmatch(r"[+-]?[€£$¢]?\d+", last_word)
                 ):
                     results.append("point five")
                 else:
@@ -454,7 +459,7 @@ class EnglishNumberNormalizer:
 
         def extract_cents(m: Match):
             try:
-                return f"¢{int(m.group(1))}"
+                return f"¢{int(m.group(1).ljust(2, '0'))}"
             except ValueError:
                 return m.string
 
@@ -570,6 +575,11 @@ class EnglishTextNormalizer:
 
         s = re.sub(r"(?<=\d),(?=\d)", "", s)  # remove commas between digits
         s = re.sub(r"\.([^0-9]|$)", r" \1", s)  # remove periods not followed by numbers
+
+        # preserve token-leading numeric signs as number words; internal hyphens such
+        # as "$0-36" remain punctuation and are removed by the symbol cleaner below
+        s = re.sub(r"(?<!\S)-(?=[€£$¢]?\d)", "minus ", s)
+        s = re.sub(r"(?<!\S)\+(?=[€£$¢]?\d)", "plus ", s)
         s = remove_symbols_and_diacritics(s, keep=".%$¢€£")  # keep numeric symbols
 
         s = self.standardize_numbers(s)

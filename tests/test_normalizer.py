@@ -164,6 +164,129 @@ def test_number_normalizer_preserves_signs_with_currency(std, text, expected):
     assert std(text) == expected
 
 
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("-$5", "-$5"),
+        ("+€5", "+€5"),
+        ("-5 dollars", "-$5"),
+        ("-$0.50", "-¢50"),
+    ],
+)
+def test_number_normalizer_preserves_literal_signs_with_currency(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("point $5", "point $5"), ("point -5", "point -5")],
+)
+def test_number_normalizer_does_not_append_prefixed_values_to_decimals(text, expected):
+    assert EnglishNumberNormalizer()(text) == expected
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("point -5", "point -5"),
+        ("point  -5", "point -5"),
+        ("point\t-5", "point -5"),
+        ("point\n-5", "point -5"),
+        ("point minus five", "point -5"),
+        ("point +5", "point +5"),
+        ("point plus five", "point +5"),
+        ("point $5", "point $5"),
+        ("2 point -5", "2 point -5"),
+        ("checkpoint -5", "checkpoint -5"),
+        ("endpoint +5", "endpoint +5"),
+        ("score -5", "score -5"),
+        ("1 -5", "one -5"),
+        ("point five", "0.5"),
+        ("2 point 5", "2.5"),
+        ("eighth", "8th"),
+        ("twenty eighth", "28th"),
+        ("0 double zero", "000"),
+        ("0 triple one", "0111"),
+    ],
+)
+def test_signed_tokens_and_decimal_boundaries(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("minus $5 dollars", "-$5"),
+        ("minus $5 million dollars", "-$5000000"),
+        ("minus $5 dollars and fifty cents", "-$5.50"),
+        ("-$5 million", "-$5000000"),
+        ("+$5 million", "+$5000000"),
+        ("-€5 million", "-€5000000"),
+        ("+€5 million euros", "+€5000000"),
+        ("-£5 million pounds", "-£5000000"),
+        ("+£5 million", "+£5000000"),
+        ("plus €5 euros", "+€5"),
+        ("negative £5 pounds", "-£5"),
+        ("-$5 dollars and one cent", "-$5.01"),
+        ("-$5 point two", "-$5.2"),
+        ("$5 million", "$5000000"),
+        ("-5 million", "-5000000"),
+    ],
+)
+def test_composed_currency_prefixes(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("$0.5", "¢50"),
+        ("$0.05", "¢5"),
+        ("$0.50", "¢50"),
+        ("$0.1", "¢10"),
+        ("$0.01", "¢1"),
+        ("$0 and a half", "¢50"),
+        ("minus $0 and a half", "-¢50"),
+        ("-$0 and a half", "-¢50"),
+        ("+$0 and a half", "+¢50"),
+        ("point five dollars", "¢50"),
+        ("minus point five dollars", "-¢50"),
+        ("-€0.5", "-¢50"),
+        ("+£0.5", "+¢50"),
+    ],
+)
+def test_currency_fraction_scale(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize("std", [EnglishNumberNormalizer(), EnglishTextNormalizer()])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("-5%", "-5%"),
+        ("+5%", "+5%"),
+        ("-5th", "-5th"),
+        ("+1st", "+1st"),
+        ("-2nd", "-2nd"),
+        ("-3rd", "-3rd"),
+        ("-1960s", "-1960s"),
+        ("-5.5%", "-5.5%"),
+        ("minus 5%", "-5%"),
+    ],
+)
+def test_literal_signs_with_numeric_suffixes(std, text, expected):
+    assert std(text) == expected
+
+
+@pytest.mark.parametrize(("text", "expected"), [("5-2", "5 2"), ("$0-36", "$0 36")])
+def test_text_normalizer_keeps_internal_hyphens_as_separators(text, expected):
+    assert EnglishTextNormalizer()(text) == expected
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
