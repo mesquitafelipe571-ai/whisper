@@ -202,7 +202,8 @@ class EnglishNumberNormalizer:
                 skip = False
                 continue
 
-            next_is_numeric = next is not None and re.match(
+            next_is_numeric = next is not None and re.match(r"^\d+(\.\d+)?$", next)
+            next_is_prefixed_numeric = next is not None and re.match(
                 r"^[€£$¢+-]?\d+(\.\d+)?$", next
             )
             has_prefix = current[0] in self.prefixes
@@ -339,7 +340,7 @@ class EnglishNumberNormalizer:
                 if value is not None:
                     yield output(value)
 
-                if next in self.words or next_is_numeric:
+                if next in self.words or next_is_prefixed_numeric:
                     prefix = self.preceding_prefixers[current]
                 else:
                     yield output(current)
@@ -570,6 +571,11 @@ class EnglishTextNormalizer:
 
         s = re.sub(r"(?<=\d),(?=\d)", "", s)  # remove commas between digits
         s = re.sub(r"\.([^0-9]|$)", r" \1", s)  # remove periods not followed by numbers
+
+        # preserve token-leading numeric signs as number words; internal hyphens such
+        # as "$0-36" remain punctuation and are removed by the symbol cleaner below
+        s = re.sub(r"(?<!\w)(?<!point )-(?=[€£$¢]?\d)", "minus ", s)
+        s = re.sub(r"(?<!\w)(?<!point )\+(?=[€£$¢]?\d)", "plus ", s)
         s = remove_symbols_and_diacritics(s, keep=".%$¢€£")  # keep numeric symbols
 
         s = self.standardize_numbers(s)
