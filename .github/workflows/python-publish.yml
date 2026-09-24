@@ -4,11 +4,20 @@ on:
   push:
     branches:
     - main
+permissions:
+  contents: read
+
 jobs:
   deploy:
+    # Only the upstream repository publishes to PyPI; forks never release.
+    if: github.repository == 'openai/whisper'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # softprops/action-gh-release creates the release tag
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
     - uses: actions-ecosystem/action-regex-match@9e6c4fb3d5e898f505be7a1fb6e7b0a278f6665b # v2
       id: regex-match
       with:
